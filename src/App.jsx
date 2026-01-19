@@ -179,6 +179,7 @@ function App() {
                     totalQuestions={sessions[selectedSessionId]?.length || 0}
                     onRetry={() => handleStartSession(selectedSessionId)}
                     onHome={() => setScreen('welcome')}
+                    childName={userData.childName}
                 />
             )}
             {screen === 'parent' && (

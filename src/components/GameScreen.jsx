@@ -59,7 +59,7 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                 playSound('win');
 
                 // Wait for speech to finish BEFORE transitioning
-                await speak(`Excellent! ${currentWord.en}`, 'en-US');
+                await speak(`Excellent!`, 'en-US');
 
                 // Add extra delay for user to appreciate the victory
                 await new Promise(r => setTimeout(r, 1500));

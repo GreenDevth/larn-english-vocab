@@ -1,11 +1,10 @@
-import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
-import confetti from 'canvas-confetti';
-import { Trophy, RefreshCcw, Home } from 'lucide-react';
+import Certificate from './Certificate';
 
-const ScoreBoard = ({ score, totalQuestions, onRetry, onHome }) => {
+const ScoreBoard = ({ score, totalQuestions, onRetry, onHome, childName }) => {
+    const [showCertificate, setShowCertificate] = React.useState(false);
+
     useEffect(() => {
-        // Fire confetti on mount
+        // ... (confetti logic remains same) ...
         const duration = 3000;
         const end = Date.now() + duration;
 
@@ -32,8 +31,19 @@ const ScoreBoard = ({ score, totalQuestions, onRetry, onHome }) => {
         frame();
     }, []);
 
+    const isHighScore = score >= (totalQuestions * 10) * 0.8; // > 80%
+
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
+            {showCertificate && (
+                <Certificate
+                    childName={childName || "น้องคนเก่ง"}
+                    score={score}
+                    totalQuestions={totalQuestions}
+                    onClose={() => setShowCertificate(false)}
+                />
+            )}
+
             <motion.div
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -53,6 +63,14 @@ const ScoreBoard = ({ score, totalQuestions, onRetry, onHome }) => {
                 </div>
 
                 <div className="space-y-4">
+                    {isHighScore && (
+                        <button
+                            onClick={() => setShowCertificate(true)}
+                            className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white py-4 rounded-2xl font-bold text-xl shadow-lg hover:from-yellow-500 hover:to-orange-500 transition-transform active:scale-95 flex items-center justify-center gap-2 animate-bounce"
+                        >
+                            <Trophy /> รับใบประกาศนียบัตร
+                        </button>
+                    )}
                     <button
                         onClick={onRetry}
                         className="w-full bg-brand-green text-white py-4 rounded-2xl font-bold text-xl shadow-lg hover:bg-green-400 transition-transform active:scale-95 flex items-center justify-center gap-2"

@@ -1,9 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { BookOpen, Star, Lock, User, Settings } from 'lucide-react';
+import { useModal } from '../contexts/ModalContext';
 
 const WelcomeScreen = ({ sessions, onStartSession, onUnlockSession, onOpenParent, userData }) => {
     const { totalStars, childName, unlockedSessions = [1] } = userData;
+    const { showConfirm } = useModal();
 
     return (
         <div className="min-h-screen p-4 pb-20 bg-blue-50">
@@ -61,9 +63,13 @@ const WelcomeScreen = ({ sessions, onStartSession, onUnlockSession, onOpenParent
                                     onStartSession(sessionId);
                                 } else {
                                     // Lock click handler
-                                    if (confirm(`ด่านนี้ล็อคอยู่! ต้องการใช้ 50 ดาวแลกไหม?`)) {
-                                        onUnlockSession(sessionId);
-                                    }
+                                    showConfirm({
+                                        title: 'ด่านนี้ล็อคอยู่!',
+                                        message: 'ต้องใช้ 50 ดาวเพื่อปลดล็อคด่านนี้\nยืนยันการแลกดาวหรือไม่?',
+                                        confirmText: 'แลก 50 ดาว',
+                                        variant: 'warning',
+                                        onConfirm: () => onUnlockSession(sessionId)
+                                    });
                                 }
                             }}
                             className={`rounded-3xl overflow-hidden shadow-xl border-b-8 cursor-pointer relative

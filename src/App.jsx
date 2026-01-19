@@ -7,11 +7,14 @@ import GameScreen from './components/GameScreen';
 import ScoreBoard from './components/ScoreBoard';
 import OnboardingScreen from './components/OnboardingScreen';
 import ParentDashboard from './components/ParentDashboard';
+import { useModal } from './contexts/ModalContext';
+import ModalContainer from './components/ui/ModalContainer';
 
 function App() {
     const [vocabData, setVocabData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userData, setUserData] = useState(loadProgress());
+    const { showAlert } = useModal();
     // Use a derived state for screen to handle initial load vs onboarding
     const [screen, setScreen] = useState('loading');
 
@@ -111,9 +114,17 @@ function App() {
         const success = unlockSessionWithStars(sessionId, 50); // Cost 50 stars
         if (success) {
             setUserData(loadProgress()); // Update UI
-            alert(`🎉 ปลดล็อคด่าน ${sessionId} เรียบร้อย!`);
+            showAlert({
+                title: 'เยี่ยมมาก!',
+                message: `🎉 ปลดล็อคด่าน ${sessionId} เรียบร้อย!`,
+                variant: 'success'
+            });
         } else {
-            alert(`⭐ ดาวไม่พอครับ! ต้องใช้ 50 ดวง (มี ${userData.totalStars})`);
+            showAlert({
+                title: 'ดาวไม่พอ!',
+                message: `⭐ ต้องใช้ 50 ดวง (คุณมี ${userData.totalStars})`,
+                variant: 'warning'
+            });
         }
     };
 
@@ -180,6 +191,7 @@ function App() {
                     }}
                 />
             )}
+            <ModalContainer />
         </div>
     );
 }

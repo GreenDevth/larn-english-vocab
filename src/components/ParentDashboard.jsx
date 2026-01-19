@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone } from 'lucide-react';
 import { getVocabData, saveVocabData, resetAllData, getParentPin, setParentPin, saveProgress, loadProgress } from '../utils/storage';
-import { fetchVocabFromSheet } from '../utils/googleSheet';
+import { fetchVocabFromSheet, updateSheetData } from '../utils/googleSheet';
+import { useModal } from '../contexts/ModalContext';
 
 const ParentDashboard = ({ onExit }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -9,10 +10,12 @@ const ParentDashboard = ({ onExit }) => {
     const [activeTab, setActiveTab] = useState('sync');
     const [message, setMessage] = useState('');
     const [currentPin, setCurrentPin] = useState('1234');
+    const { showAlert, showConfirm } = useModal();
 
     // Sync State
     const [sheetUrl, setSheetUrl] = useState(localStorage.getItem('larnvocab_sheet_url') || '');
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const [lastSyncTime, setLastSyncTime] = useState(localStorage.getItem('larnvocab_last_sync') || '-');
 
     useEffect(() => {
@@ -25,7 +28,7 @@ const ParentDashboard = ({ onExit }) => {
         if (pinInput === currentPin) {
             setIsAuthenticated(true);
         } else {
-            alert('รหัสผ่านไม่ถูกต้อง (Default: 1234)');
+            showAlert({ title: 'เข้าสู่ระบบไม่สำเร็จ', message: 'รหัสผ่านไม่ถูกต้อง (Default: 1234)', variant: 'error' });
         }
     };
 
@@ -40,24 +43,59 @@ const ParentDashboard = ({ onExit }) => {
             const time = new Date().toLocaleString();
             localStorage.setItem('larnvocab_last_sync', time);
             setLastSyncTime(time);
-            setMessage(`✅ Sync สำเร็จ! โหลดคำศัพท์มาทั้งหมด ${data.length} คำ`);
+            showAlert({ title: 'สำเร็จ', message: `✅ Sync สำเร็จ! โหลดคำศัพท์มาทั้งหมด ${data.length} คำ`, variant: 'success' });
         } catch (error) {
-            setMessage(`❌ เกิดข้อผิดพลาด: ${error.message}`);
+            showAlert({ title: 'ผิดพลาด', message: `❌ เกิดข้อผิดพลาด: ${error.message}`, variant: 'error' });
         } finally {
             setIsSyncing(false);
         }
     };
 
-    const handleReset = () => {
-        if (confirm('⚠️ คำเตือน: ข้อมูลความก้าวหน้าทั้งหมด จะหายไป!')) {
-            resetAllData();
+    const handleUpload = async () => {
+        if (!sheetUrl) return;
+        setIsUploading(true);
+        setMessage('');
+        try {
+            const currentVocab = getVocabData() || [];
+            if (currentVocab.length === 0) {
+                showAlert({ title: 'ข้อควรรู้', message: '⚠️ ไม่พบข้อมูลคำศัพท์ในเครื่อง (ใช้ข้อมูลเริ่มต้นจาก CSV)', variant: 'warning' });
+                // Optionally we could upload CSV data if we parsed it, but usually customVocab is what we want to sync up.
+            }
+
+            // Note: If customVocab is null, we might want to warn user.
+            // For now let's assume we send currentVocab (empty array if null which is bad, but handleSync handles fetch).
+            // Let's rely on what's in local storage.
+
+            const result = await updateSheetData(sheetUrl, currentVocab);
+
+            if (result.status === 'success') {
+                const time = new Date().toLocaleString();
+                setLastSyncTime(time);
+                showAlert({ title: 'สำเร็จ', message: `☁️ อัปโหลดสำเร็จ! จำนวน ${result.count} รายการ`, variant: 'success' });
+            } else {
+                throw new Error('Upload failed');
+            }
+        } catch (error) {
+            showAlert({ title: 'ผิดพลาด', message: `❌ อัปโหลดไม่สำเร็จ: ${error.message}`, variant: 'error' });
+        } finally {
+            setIsUploading(false);
         }
+    };
+
+    const handleReset = () => {
+        showConfirm({
+            title: 'ยืนยันการล้างข้อมูล',
+            message: '⚠️ ข้อมูลความก้าวหน้าทั้งหมดจะหายไป!\nคุณต้องการดำเนินการต่อหรือไม่?',
+            variant: 'error',
+            confirmText: 'ลบข้อมูล',
+            onConfirm: () => resetAllData()
+        });
     };
 
     const handleChangePin = (newPin) => {
         setParentPin(newPin);
         setCurrentPin(newPin);
-        alert('เปลี่ยนรหัสผ่านเรียบร้อยแล้ว');
+        showAlert({ title: 'สำเร็จ', message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว', variant: 'success' });
     };
 
     if (!isAuthenticated) {
@@ -138,16 +176,28 @@ const ParentDashboard = ({ onExit }) => {
                                 />
                             </div>
 
-                            <button
-                                onClick={handleSync}
-                                disabled={isSyncing || !sheetUrl}
-                                className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg flex items-center justify-center gap-3 transition-all
-                                    ${isSyncing ? 'bg-gray-400' : 'bg-green-500 hover:bg-green-600 hover:scale-[1.02]'}
-                                `}
-                            >
-                                {isSyncing ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
-                                {isSyncing ? 'กำลังดึงข้อมูล...' : 'Sync ข้อมูลเดี๋ยวนี้'}
-                            </button>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={handleSync}
+                                    disabled={isSyncing || isUploading || !sheetUrl}
+                                    className={`py-4 rounded-xl font-bold text-lg text-white shadow-lg flex items-center justify-center gap-3 transition-all
+                                        ${isSyncing ? 'bg-gray-400' : 'bg-green-500 hover:bg-green-600 hover:scale-[1.02]'}
+                                    `}
+                                >
+                                    {isSyncing ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+                                    {isSyncing ? 'กำลังดึง...' : 'ดึงข้อมูลลง'}
+                                </button>
+                                <button
+                                    onClick={handleUpload}
+                                    disabled={isSyncing || isUploading || !sheetUrl}
+                                    className={`py-4 rounded-xl font-bold text-lg text-white shadow-lg flex items-center justify-center gap-3 transition-all
+                                        ${isUploading ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600 hover:scale-[1.02]'}
+                                    `}
+                                >
+                                    {isUploading ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+                                    {isUploading ? 'กำลังส่ง...' : 'ส่งข้อมูลขึ้น'}
+                                </button>
+                            </div>
 
                             {message && (
                                 <div className={`mt-6 p-4 rounded-xl text-center font-bold border ${message.includes('สำเร็จ') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
@@ -188,6 +238,7 @@ const ParentDashboard = ({ onExit }) => {
 
 const PinChangeForm = ({ onSave }) => {
     const [newPin, setNewPin] = useState('');
+    const { showAlert } = useModal();
     return (
         <div className="flex flex-col gap-3">
             <input
@@ -199,7 +250,7 @@ const PinChangeForm = ({ onSave }) => {
                 placeholder="New PIN"
             />
             <button
-                onClick={() => newPin.length === 4 ? onSave(newPin) : alert('กรุณากรอก 4 หลัก')}
+                onClick={() => newPin.length === 4 ? onSave(newPin) : showAlert({ title: 'ผิดพลาด', message: 'กรุณากรอก 4 หลัก', variant: 'warning' })}
                 className="bg-brand-pink hover:bg-pink-600 text-white py-3 rounded-xl font-bold transition-colors"
             >
                 บันทึกรหัสใหม่

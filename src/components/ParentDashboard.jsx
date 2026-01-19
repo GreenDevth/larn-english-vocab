@@ -169,6 +169,10 @@ const ParentDashboard = ({ onExit }) => {
                             <div className="mb-4">
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Google Apps Script URL</label>
                                 <input
+                                    type="url"
+                                    id="sheetUrlInput"
+                                    name="sheetUrl"
+                                    autoComplete="off"
                                     className="w-full p-4 border-2 border-gray-200 rounded-xl bg-gray-50 focus:border-green-500 focus:outline-none transition-colors"
                                     placeholder="https://script.google.com/..."
                                     value={sheetUrl}

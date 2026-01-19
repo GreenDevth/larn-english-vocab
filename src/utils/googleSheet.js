@@ -30,13 +30,9 @@ export const updateSheetData = async (scriptUrl, data) => {
     try {
         const response = await fetch(scriptUrl, {
             method: 'POST',
-            mode: 'no-cors', // Google Apps Script often requires no-cors for simple posts, but if we return JSON, standard CORS might be needed. 
-            // However, GAS Web App default behavior usually follows redirects which fetch follows. 
-            // Let's try standard POST first. If 'no-cors' is used, we can't read response.
-            // Actually, for GAS `ContentService.createTextOutput`, we can usually read if we allow "Anyone".
-            // Let's force proper CORS headers in GAS side (which is default for "Anyone").
+            // mode: 'no-cors', // REMOVED to allow reading JSON response
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'text/plain;charset=utf-8', // Plain text to avoid complex preflight
             },
             body: JSON.stringify(data)
         });

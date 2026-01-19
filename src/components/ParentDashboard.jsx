@@ -210,7 +210,8 @@ const ParentDashboard = ({ onExit }) => {
                             )}
 
                             <p className="text-center text-gray-400 text-sm mt-8">
-                                Sync ล่าสุด: {lastSyncTime}
+                                Sync ล่าสุด: {lastSyncTime} <br />
+                                <span className="text-xs text-gray-300">v1.1 (Latest)</span>
                             </p>
                         </div>
                     )}

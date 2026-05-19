@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone } from 'lucide-react';
+import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen } from 'lucide-react';
 import { getVocabData, saveVocabData, resetAllData, getParentPin, setParentPin, saveProgress, loadProgress } from '../utils/storage';
-import { fetchVocabFromSheet, updateSheetData } from '../utils/googleSheet';
+import { fetchVocabFromSheet, updateSheetData, fetchSheetsList } from '../utils/googleSheet';
 import { useModal } from '../contexts/ModalContext';
 
 const ParentDashboard = ({ onExit }) => {
@@ -18,10 +18,24 @@ const ParentDashboard = ({ onExit }) => {
     const [isUploading, setIsUploading] = useState(false);
     const [lastSyncTime, setLastSyncTime] = useState(localStorage.getItem('larnvocab_last_sync') || '-');
 
+    // States สำหรับจัดการหลายแผ่นงาน
+    const [selectedSheet, setSelectedSheet] = useState(localStorage.getItem('larnvocab_selected_sheet') || 'VocabData');
+    const [sheetList, setSheetList] = useState([]);
+    const [isFetchingSheets, setIsFetchingSheets] = useState(false);
+    const [customSheetName, setCustomSheetName] = useState('');
+    const [isCustomSheet, setIsCustomSheet] = useState(false);
+
     useEffect(() => {
         const savedPin = getParentPin();
         if (savedPin) setCurrentPin(savedPin);
     }, []);
+
+    // โหลดรายชื่อชีตอัตโนมัติเมื่อเข้าสู่ระบบสำเร็จและมี URL แล้ว
+    useEffect(() => {
+        if (sheetUrl && isAuthenticated) {
+            handleFetchSheetsList(false);
+        }
+    }, [isAuthenticated]);
 
     const handleLogin = (e) => {
         e.preventDefault();
@@ -32,18 +46,64 @@ const ParentDashboard = ({ onExit }) => {
         }
     };
 
+    // ฟังก์ชันโหลดรายชื่อแผ่นงานทั้งหมดจาก Cloud
+    const handleFetchSheetsList = async (showSuccessAlert = true) => {
+        if (!sheetUrl) return;
+        setIsFetchingSheets(true);
+        try {
+            const list = await fetchSheetsList(sheetUrl);
+            setSheetList(list);
+            if (list.length > 0) {
+                const savedSheet = localStorage.getItem('larnvocab_selected_sheet') || 'VocabData';
+                if (list.includes(savedSheet)) {
+                    setSelectedSheet(savedSheet);
+                } else {
+                    setSelectedSheet(list[0]);
+                }
+            }
+            if (showSuccessAlert) {
+                showAlert({ title: 'สำเร็จ', message: `🔍 โหลดรายชื่อแผ่นงานสำเร็จ! พบทั้งหมด ${list.length} รายการค่ะ`, variant: 'success' });
+            }
+        } catch (error) {
+            if (showSuccessAlert) {
+                showAlert({ title: 'โหลดรายชื่อแผ่นงานล้มเหลว', message: `ไม่สามารถเข้าถึงแผ่นงานได้: ${error.message}`, variant: 'error' });
+            }
+            console.error(error);
+        } finally {
+            setIsFetchingSheets(false);
+        }
+    };
+
     const handleSync = async () => {
         if (!sheetUrl) return;
         setIsSyncing(true);
         setMessage('');
+
+        const targetSheet = isCustomSheet ? customSheetName.trim() : selectedSheet;
+        if (!targetSheet) {
+            showAlert({ title: 'ผิดพลาด', message: 'กรุณาเลือกหรือป้อนชื่อแผ่นงานก่อนทำการ Sync นะคะ', variant: 'warning' });
+            setIsSyncing(false);
+            return;
+        }
+
         try {
-            const data = await fetchVocabFromSheet(sheetUrl);
+            const data = await fetchVocabFromSheet(sheetUrl, targetSheet);
             saveVocabData(data);
             localStorage.setItem('larnvocab_sheet_url', sheetUrl);
+            localStorage.setItem('larnvocab_selected_sheet', targetSheet);
+
             const time = new Date().toLocaleString();
             localStorage.setItem('larnvocab_last_sync', time);
             setLastSyncTime(time);
-            showAlert({ title: 'สำเร็จ', message: `✅ Sync สำเร็จ! โหลดคำศัพท์มาทั้งหมด ${data.length} คำ`, variant: 'success' });
+
+            showAlert({ 
+                title: 'สำเร็จ', 
+                message: `✅ Sync สำเร็จ! โหลดคำศัพท์จากแผ่นงาน "${targetSheet}" มาทั้งหมด ${data.length} คำเรียบร้อยแล้วค่ะ`, 
+                variant: 'success' 
+            });
+
+            // อัปเดตรายชื่อชีตเผื่อมีความเปลี่ยนแปลง
+            await handleFetchSheetsList(false);
         } catch (error) {
             showAlert({ title: 'ผิดพลาด', message: `❌ เกิดข้อผิดพลาด: ${error.message}`, variant: 'error' });
         } finally {
@@ -55,25 +115,39 @@ const ParentDashboard = ({ onExit }) => {
         if (!sheetUrl) return;
         setIsUploading(true);
         setMessage('');
+
+        const targetSheet = isCustomSheet ? customSheetName.trim() : selectedSheet;
+        if (!targetSheet) {
+            showAlert({ title: 'ผิดพลาด', message: 'กรุณาเลือกหรือป้อนชื่อแผ่นงานก่อนทำการอัปโหลดนะคะ', variant: 'warning' });
+            setIsUploading(false);
+            return;
+        }
+
         try {
             const currentVocab = getVocabData() || [];
-            if (currentVocab.length === 0) {
-                showAlert({ title: 'ข้อควรรู้', message: '⚠️ ไม่พบข้อมูลคำศัพท์ในเครื่อง (ใช้ข้อมูลเริ่มต้นจาก CSV)', variant: 'warning' });
-                // Optionally we could upload CSV data if we parsed it, but usually customVocab is what we want to sync up.
-            }
-
-            // Note: If customVocab is null, we might want to warn user.
-            // For now let's assume we send currentVocab (empty array if null which is bad, but handleSync handles fetch).
-            // Let's rely on what's in local storage.
-
-            const result = await updateSheetData(sheetUrl, currentVocab);
+            const result = await updateSheetData(sheetUrl, currentVocab, targetSheet);
 
             if (result.status === 'success') {
                 const time = new Date().toLocaleString();
                 setLastSyncTime(time);
-                showAlert({ title: 'สำเร็จ', message: `☁️ อัปโหลดสำเร็จ! จำนวน ${result.count} รายการ`, variant: 'success' });
+                localStorage.setItem('larnvocab_sheet_url', sheetUrl);
+                localStorage.setItem('larnvocab_selected_sheet', targetSheet);
+
+                let successMsg = `☁️ อัปโหลดไปยังแผ่นงาน "${targetSheet}" สำเร็จ! จำนวน ${result.count} รายการค่ะ`;
+                if (result.isNewSheet) {
+                    successMsg = `✨ สร้างแผ่นงานใหม่ "${targetSheet}" และอัปโหลดสำเร็จแล้วค่ะ! จำนวน ${result.count} รายการ`;
+                }
+
+                showAlert({ title: 'สำเร็จ', message: successMsg, variant: 'success' });
+
+                // หากเป็นการสร้างชีตใหม่ ให้สลับกลับมาโหมดเลือกชีตปกติ
+                setIsCustomSheet(false);
+                setCustomSheetName('');
+
+                // โหลดรายชื่อแผ่นงานใหม่เพื่อแสดงผลใน dropdown ทันที
+                await handleFetchSheetsList(false);
             } else {
-                throw new Error('Upload failed');
+                throw new Error(result.message || 'Upload failed');
             }
         } catch (error) {
             showAlert({ title: 'ผิดพลาด', message: `❌ อัปโหลดไม่สำเร็จ: ${error.message}`, variant: 'error' });
@@ -158,7 +232,7 @@ const ParentDashboard = ({ onExit }) => {
                 <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
                     {activeTab === 'sync' && (
                         <div className="max-w-xl mx-auto">
-                            <div className="text-center mb-8">
+                            <div className="text-center mb-6">
                                 <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <FileText className="text-green-600" size={32} />
                                 </div>
@@ -168,22 +242,96 @@ const ParentDashboard = ({ onExit }) => {
 
                             <div className="mb-4">
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Google Apps Script URL</label>
-                                <input
-                                    type="url"
-                                    id="sheetUrlInput"
-                                    name="sheetUrl"
-                                    autoComplete="off"
-                                    className="w-full p-4 border-2 border-gray-200 rounded-xl bg-gray-50 focus:border-green-500 focus:outline-none transition-colors"
-                                    placeholder="https://script.google.com/..."
-                                    value={sheetUrl}
-                                    onChange={e => setSheetUrl(e.target.value)}
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="url"
+                                        id="sheetUrlInput"
+                                        name="sheetUrl"
+                                        autoComplete="off"
+                                        className="flex-1 p-4 border-2 border-gray-200 rounded-xl bg-gray-50 focus:border-green-500 focus:outline-none transition-colors"
+                                        placeholder="https://script.google.com/..."
+                                        value={sheetUrl}
+                                        onChange={e => setSheetUrl(e.target.value)}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFetchSheetsList(true)}
+                                        disabled={isFetchingSheets || !sheetUrl}
+                                        className={`px-4 rounded-xl font-bold text-sm text-white shadow flex items-center justify-center gap-1 transition-all ${
+                                            isFetchingSheets ? 'bg-gray-400' : 'bg-gray-700 hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        {isFetchingSheets ? <RefreshCw className="animate-spin" size={16} /> : <List size={16} />}
+                                        {isFetchingSheets ? 'กำลังโหลด...' : 'ค้นหาแผ่นงาน'}
+                                    </button>
+                                </div>
                             </div>
+
+                            {sheetUrl && (
+                                <div className="mb-6 p-5 bg-green-50/50 border border-green-100 rounded-2xl">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className="block text-sm font-bold text-gray-700">📦 การเลือกแผ่นงานคำศัพท์ (Sheets)</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsCustomSheet(!isCustomSheet);
+                                                setCustomSheetName('');
+                                            }}
+                                            className="text-xs font-bold text-brand-blue hover:underline flex items-center gap-1"
+                                        >
+                                            {isCustomSheet ? (
+                                                <>
+                                                    <FolderOpen size={14} /> เลือกแผ่นงานที่มีอยู่
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Plus size={14} /> สร้างแผ่นงานใหม่
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    {isCustomSheet ? (
+                                        <div>
+                                            <input
+                                                type="text"
+                                                className="w-full p-3 border-2 border-green-200 rounded-xl bg-white focus:border-green-500 focus:outline-none transition-colors font-medium text-gray-700"
+                                                placeholder="พิมพ์ชื่อแผ่นงานใหม่ (เช่น Space, Food, Animals)"
+                                                value={customSheetName}
+                                                onChange={e => setCustomSheetName(e.target.value)}
+                                            />
+                                            <p className="text-xs text-gray-400 mt-1.5">
+                                                💡 เมื่อคุณกด "ส่งข้อมูลขึ้น" ระบบจะสร้างแผ่นงานใหม่นี้บน Google Sheet ให้คุณโดยอัตโนมัติค่ะ
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            {sheetList.length > 0 ? (
+                                                <select
+                                                    value={selectedSheet}
+                                                    onChange={e => setSelectedSheet(e.target.value)}
+                                                    className="w-full p-3 border-2 border-gray-200 rounded-xl bg-white focus:border-green-500 focus:outline-none transition-colors font-medium text-gray-700"
+                                                >
+                                                    {sheetList.map(name => (
+                                                        <option key={name} value={name}>
+                                                            📄 {name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <div className="text-center py-2 text-sm text-gray-400 font-medium">
+                                                    {isFetchingSheets ? 'กำลังตรวจสอบ...' : 'ไม่พบแผ่นงานหรือยังไม่ได้กดค้นหาแผ่นงานค่ะ (คลิก "ค้นหาแผ่นงาน")'}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <button
                                     onClick={handleSync}
-                                    disabled={isSyncing || isUploading || !sheetUrl}
+                                    disabled={isSyncing || isUploading || !sheetUrl || (isCustomSheet && !customSheetName)}
                                     className={`py-4 rounded-xl font-bold text-lg text-white shadow-lg flex items-center justify-center gap-3 transition-all
                                         ${isSyncing ? 'bg-gray-400' : 'bg-green-500 hover:bg-green-600 hover:scale-[1.02]'}
                                     `}
@@ -193,7 +341,7 @@ const ParentDashboard = ({ onExit }) => {
                                 </button>
                                 <button
                                     onClick={handleUpload}
-                                    disabled={isSyncing || isUploading || !sheetUrl}
+                                    disabled={isSyncing || isUploading || !sheetUrl || (isCustomSheet && !customSheetName)}
                                     className={`py-4 rounded-xl font-bold text-lg text-white shadow-lg flex items-center justify-center gap-3 transition-all
                                         ${isUploading ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600 hover:scale-[1.02]'}
                                     `}
@@ -211,7 +359,7 @@ const ParentDashboard = ({ onExit }) => {
 
                             <p className="text-center text-gray-400 text-sm mt-8">
                                 Sync ล่าสุด: {lastSyncTime} <br />
-                                <span className="text-xs text-gray-300">v1.1 (Latest)</span>
+                                <span className="text-xs text-gray-300">v1.3 (Dynamic Sheets Supported)</span>
                             </p>
                         </div>
                     )}

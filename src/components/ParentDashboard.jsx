@@ -52,15 +52,25 @@ const ParentDashboard = ({ onExit }) => {
         setIsFetchingSheets(true);
         try {
             const list = await fetchSheetsList(sheetUrl);
-            setSheetList(list);
-            if (list.length > 0) {
-                const savedSheet = localStorage.getItem('larnvocab_selected_sheet') || 'VocabData';
-                if (list.includes(savedSheet)) {
-                    setSelectedSheet(savedSheet);
-                } else {
-                    setSelectedSheet(list[0]);
+            
+            // 🛡️ ป้องกันระบบพัง (CORS/React Error #31): กรองเฉพาะรายการที่เป็น String เท่านั้น 
+            // กรณีที่ URL ของสคริปต์ส่งค่ากลับมาผิดรูปแบบ (เช่น ส่ง Array ของ Object คำศัพท์มาแทน)
+            if (Array.isArray(list)) {
+                const validList = list.filter(item => typeof item === 'string');
+                setSheetList(validList);
+                
+                if (validList.length > 0) {
+                    const savedSheet = localStorage.getItem('larnvocab_selected_sheet') || 'VocabData';
+                    if (validList.includes(savedSheet)) {
+                        setSelectedSheet(savedSheet);
+                    } else {
+                        setSelectedSheet(validList[0]);
+                    }
                 }
+            } else {
+                setSheetList([]);
             }
+
             if (showSuccessAlert) {
                 showAlert({ title: 'สำเร็จ', message: `🔍 โหลดรายชื่อแผ่นงานสำเร็จ! พบทั้งหมด ${list.length} รายการค่ะ`, variant: 'success' });
             }

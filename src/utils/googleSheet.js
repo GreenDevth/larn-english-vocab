@@ -34,13 +34,19 @@ export const fetchVocabFromSheet = async (scriptUrl, sheetName = 'VocabData') =>
 
 export const fetchSheetsList = async (scriptUrl) => {
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
         const url = `${scriptUrl}?action=getSheets`;
         const response = await fetch(url, {
             method: 'GET',
-            redirect: 'follow' // บังคับให้เบราว์เซอร์ติดตาม 302 Redirect ไปยังหน้าที่มี CORS headers
+            redirect: 'follow',
+            signal: controller.signal // ✅ Add abort signal
         });
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
-            throw new Error('ไม่สามารถดึงข้อมูลรายชื่อแผ่นงานได้ค่ะ');
+            throw new Error(`HTTP Error: ${response.status}`);
         }
         const sheets = await response.json();
         

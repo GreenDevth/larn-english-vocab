@@ -30,19 +30,75 @@ const ParentDashboard = ({ onExit }) => {
         if (savedPin) setCurrentPin(savedPin);
     }, []);
 
+    // ✅ Helper function to clear old URL
+    const handleResetUrl = () => {
+        showConfirm({
+            title: 'ยืนยันการล้าง URL เก่า',
+            message: 'ต้องการลบ URL ของ Google Apps Script เก่าหรือไม่? (เพื่อให้ใส่ URL ใหม่)',
+            onConfirm: () => {
+                localStorage.removeItem('larnvocab_sheet_url');
+                localStorage.removeItem('larnvocab_last_sync');
+                setSheetUrl('');
+                setLastSyncTime('-');
+                setSheetList([]);
+                showAlert({ 
+                    title: 'สำเร็จ', 
+                    message: 'ล้าง URL เรียบร้อยแล้ว กรุณาใส่ URL ใหม่ค่ะ', 
+                    variant: 'success' 
+                });
+            }
+        });
+    };
+
     // โหลดรายชื่อชีตอัตโนมัติเมื่อเข้าสู่ระบบสำเร็จและมี URL แล้ว
     useEffect(() => {
-        if (sheetUrl && isAuthenticated) {
-            // ✅ Wrapped in try-catch to prevent unmounting
-            (async () => {
-                try {
-                    await handleFetchSheetsList(false);
-                } catch (err) {
-                    console.error("Initial fetch sheets error:", err);
-                    // ไม่แสดง alert ตอนโหลดครั้งแรก เพื่อไม่ให้รบกวน
+        if (!sheetUrl || !isAuthenticated) return;
+        
+        let isMounted = true; // ✅ Prevent state update on unmounted component
+        const controller = new AbortController();
+        
+        const loadSheets = async () => {
+            setIsFetchingSheets(true);
+            try {
+                // Set timeout (5 seconds)
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const list = await fetchSheetsList(sheetUrl);
+                clearTimeout(timeoutId);
+                
+                if (!isMounted) return; // ✅ Check before state update
+                
+                if (Array.isArray(list)) {
+                    const validList = list.filter(item => typeof item === 'string');
+                    setSheetList(validList);
+                    
+                    if (validList.length > 0) {
+                        const savedSheet = localStorage.getItem('larnvocab_selected_sheet') || 'VocabData';
+                        if (validList.includes(savedSheet)) {
+                            setSelectedSheet(savedSheet);
+                        } else {
+                            setSelectedSheet(validList[0]);
+                        }
+                    }
                 }
-            })();
-        }
+            } catch (err) {
+                if (!isMounted) return; // ✅ Check before state update
+                console.error("Initial fetch sheets error:", err);
+                // Silently fail on initial load - user can manually sync if needed
+                setSheetList([]);
+            } finally {
+                if (isMounted) {
+                    setIsFetchingSheets(false);
+                }
+            }
+        };
+        
+        loadSheets();
+        
+        return () => {
+            isMounted = false;
+            controller.abort();
+        };
     }, [isAuthenticated, sheetUrl]);
 
     const handleLogin = (e) => {
@@ -56,14 +112,31 @@ const ParentDashboard = ({ onExit }) => {
 
     // ฟังก์ชันโหลดรายชื่อแผ่นงานทั้งหมดจาก Cloud
     const handleFetchSheetsList = async (showSuccessAlert = true) => {
-        if (!sheetUrl) return;
+        if (!sheetUrl) {
+            if (showSuccessAlert) {
+                showAlert({ title: 'ผิดพลาด', message: 'กรุณาใส่ URL ของ Google Apps Script ก่อนค่ะ', variant: 'warning' });
+            }
+            return;
+        }
+
+        // ✅ Validate URL format
+        if (!sheetUrl.includes('script.google.com')) {
+            if (showSuccessAlert) {
+                showAlert({ title: 'ผิดพลาด', message: 'URL ไม่ถูกต้อง กรุณาตรวจสอบ URL ของ Google Apps Script ค่ะ', variant: 'error' });
+            }
+            return;
+        }
+
         setIsFetchingSheets(true);
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
             const list = await fetchSheetsList(sheetUrl);
+            clearTimeout(timeoutId);
             
             // 🛡️ ป้องกันระบบพัง (CORS/React Error #31): กรองเฉพาะรายการที่เป็น String เท่านั้น 
-            // กรณีที่ URL ของสคริปต์ส่งค่ากลับมาผิดรูปแบบ (เช่น ส่ง Array ของ Object คำศัพท์มาแทน)
-            if (Array.isArray(list)) {
+            if (Array.isArray(list) && list.length > 0) {
                 const validList = list.filter(item => typeof item === 'string');
                 setSheetList(validList);
                 
@@ -74,19 +147,30 @@ const ParentDashboard = ({ onExit }) => {
                     } else {
                         setSelectedSheet(validList[0]);
                     }
+                    
+                    if (showSuccessAlert) {
+                        showAlert({ title: 'สำเร็จ', message: `🔍 โหลดรายชื่อแผ่นงานสำเร็จ! พบทั้งหมด ${validList.length} รายการค่ะ`, variant: 'success' });
+                    }
                 }
             } else {
                 setSheetList([]);
-            }
-
-            if (showSuccessAlert) {
-                showAlert({ title: 'สำเร็จ', message: `🔍 โหลดรายชื่อแผ่นงานสำเร็จ! พบทั้งหมด ${list.length} รายการค่ะ`, variant: 'success' });
+                if (showSuccessAlert) {
+                    showAlert({ title: 'ไม่มีแผ่นงาน', message: 'ไม่พบแผ่นงานในสคริปต์นี้ค่ะ', variant: 'warning' });
+                }
             }
         } catch (error) {
+            setSheetList([]); // ✅ Reset to default state
             if (showSuccessAlert) {
-                showAlert({ title: 'โหลดรายชื่อแผ่นงานล้มเหลว', message: `ไม่สามารถเข้าถึงแผ่นงานได้: ${error.message}`, variant: 'error' });
+                let errorMsg = error.message;
+                if (error.name === 'AbortError') {
+                    errorMsg = 'หมดเวลารอ (Timeout) - โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMsg = 'ไม่สามารถเชื่อมต่อได้ - URL อาจเก่าเกินไปหรือผิดพลาด (ลองล้าง URL แล้วใส่ URL ใหม่)';
+                }
+                showAlert({ title: 'โหลดแผ่นงานล้มเหลว', message: `${errorMsg}
+หาก AppScript เพิ่ง deploy ใหม่ ให้ล้าง URL เก่าและใส่ URL ใหม่`, variant: 'error' });
             }
-            console.error(error);
+            console.error("Fetch sheets error:", error);
         } finally {
             setIsFetchingSheets(false);
         }
@@ -282,6 +366,17 @@ const ParentDashboard = ({ onExit }) => {
                                         {isFetchingSheets ? <RefreshCw className="animate-spin" size={16} /> : <List size={16} />}
                                         {isFetchingSheets ? 'กำลังโหลด...' : 'ค้นหาแผ่นงาน'}
                                     </button>
+                                </div>
+                                <div className="mt-3 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={handleResetUrl}
+                                        disabled={!sheetUrl}
+                                        className="px-4 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors disabled:bg-gray-300 disabled:text-gray-500"
+                                    >
+                                        ล้าง URL เก่า
+                                    </button>
+                                    <span className="text-xs text-gray-500">ถ้า URL เปลี่ยนเมื่อ deploy ใหม่ ให้ล้างแล้วใส่ใหม่</span>
                                 </div>
                             </div>
 

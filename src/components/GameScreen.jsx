@@ -54,8 +54,9 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
 
             if (newUserInput.length === targetWord.length) {
                 // Word Complete
+                const newScore = score + 10; // ✅ Calculate final score BEFORE async operations
                 setFeedback('correct');
-                setScore(s => s + 10);
+                setScore(newScore);
                 playSound('win');
 
                 // Wait for speech to finish BEFORE transitioning
@@ -69,7 +70,8 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                     setFeedback(null);
                     setCurrentIndex(prev => prev + 1);
                 } else {
-                    onFinish(score + 10);
+                    // ✅ Pass final score (not stale)
+                    onFinish(newScore);
                 }
             }
         } else {

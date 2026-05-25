@@ -33,9 +33,17 @@ const ParentDashboard = ({ onExit }) => {
     // โหลดรายชื่อชีตอัตโนมัติเมื่อเข้าสู่ระบบสำเร็จและมี URL แล้ว
     useEffect(() => {
         if (sheetUrl && isAuthenticated) {
-            handleFetchSheetsList(false);
+            // ✅ Wrapped in try-catch to prevent unmounting
+            (async () => {
+                try {
+                    await handleFetchSheetsList(false);
+                } catch (err) {
+                    console.error("Initial fetch sheets error:", err);
+                    // ไม่แสดง alert ตอนโหลดครั้งแรก เพื่อไม่ให้รบกวน
+                }
+            })();
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, sheetUrl]);
 
     const handleLogin = (e) => {
         e.preventDefault();

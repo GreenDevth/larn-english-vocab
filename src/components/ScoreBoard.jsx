@@ -1,7 +1,11 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Trophy, RefreshCcw, Home } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import Certificate from './Certificate';
 
 const ScoreBoard = ({ score, totalQuestions, onRetry, onHome, childName }) => {
-    const [showCertificate, setShowCertificate] = React.useState(false);
+    const [showCertificate, setShowCertificate] = useState(false);
 
     useEffect(() => {
         // ... (confetti logic remains same) ...

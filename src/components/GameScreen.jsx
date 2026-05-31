@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, ChevronRight, X, Sparkles, AlertCircle, Settings, Type } from 'lucide-react';
+import { Volume2, ChevronRight, X, Sparkles, AlertCircle, Settings, Type, HelpCircle } from 'lucide-react';
 import { speak } from '../utils/tts';
 import { playSound } from '../utils/sound';
 import VoiceSettingsModal from './VoiceSettingsModal';
@@ -12,6 +12,9 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
     const [feedback, setFeedback] = useState(null);
     const [score, setScore] = useState(0);
     const [showSettings, setShowSettings] = useState(false);
+    const [activeKeys, setActiveKeys] = useState({});
+    const [imageError, setImageError] = useState(false);
+    const [revealHint, setRevealHint] = useState(false);
 
     // ... (currentWord logic) ...
     const currentWord = sessionData[currentIndex];
@@ -23,9 +26,37 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
 
     // ... (effects) ...
     useEffect(() => {
+        setImageError(false);
+        setRevealHint(false);
         const timeout = setTimeout(() => { speakWord(); }, 500);
         return () => clearTimeout(timeout);
     }, [currentIndex]);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (showSettings) return;
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+                return;
+            }
+
+            const key = e.key.toUpperCase();
+            if (key.length === 1 && key >= 'A' && key <= 'Z') {
+                // Flash the virtual keyboard key
+                setActiveKeys(prev => ({ ...prev, [key]: true }));
+                setTimeout(() => {
+                    setActiveKeys(prev => ({ ...prev, [key]: false }));
+                }, 150);
+
+                handleKeyPress(key);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [userInput, currentIndex, showSettings, feedback, score]);
 
     const speakWord = () => { speak(currentWord.en, 'en-US'); };
     const speakThai = () => { speak(currentWord.th, 'th-TH'); };
@@ -135,18 +166,62 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                     )}
                 </AnimatePresence>
 
-                {/* Image */}
-                <div className="w-64 h-64 bg-gray-100 rounded-[2rem] overflow-hidden mb-6 shadow-inner border-4 border-white">
-                    <img
-                        src={currentWord.image}
-                        alt={currentWord.en}
-                        className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
-                        onError={(e) => {
-                            // Fallback image
-                            e.target.src = `https://placehold.co/400x400/png?text=${currentWord.en}`;
-                        }}
-                    />
-                </div>
+                {/* Image or Mystery Card */}
+                {(!currentWord.image || imageError) ? (
+                    <motion.div
+                        onClick={() => setRevealHint(prev => !prev)}
+                        className="w-64 h-64 bg-gradient-to-br from-indigo-400 via-purple-500 to-pink-500 rounded-[2rem] shadow-xl border-4 border-white flex flex-col items-center justify-center p-4 cursor-pointer relative overflow-hidden mb-6 select-none"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        layout
+                    >
+                        {/* Decorative background circle overlays */}
+                        <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
+                        <div className="absolute -left-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
+
+                        <AnimatePresence mode="wait">
+                            {!revealHint ? (
+                                <motion.div
+                                    key="mystery"
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    className="flex flex-col items-center gap-2 text-white text-center"
+                                >
+                                    <div className="bg-white/20 p-4 rounded-full mb-1">
+                                        <HelpCircle size={48} className="text-white animate-pulse" />
+                                    </div>
+                                    <span className="text-xl font-black tracking-widest">? ? ?</span>
+                                    <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-bold mt-1">คลิกเพื่อดูคำใบ้</span>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="hint"
+                                    initial={{ opacity: 0, scale: 0.8, rotateY: 180 }}
+                                    animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                                    exit={{ opacity: 0, scale: 0.8, rotateY: -180 }}
+                                    transition={{ duration: 0.4 }}
+                                    className="flex flex-col items-center gap-2 text-white text-center"
+                                >
+                                    <div className="bg-white/20 p-4 rounded-full mb-1">
+                                        <Sparkles size={48} className="text-yellow-200" />
+                                    </div>
+                                    <span className="text-3xl font-black tracking-wide font-sans">{targetWord}</span>
+                                    <span className="text-xs bg-black/30 px-3 py-1 rounded-full font-bold mt-1">คลิกเพื่อปิดคำใบ้</span>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </motion.div>
+                ) : (
+                    <div className="w-64 h-64 bg-gray-100 rounded-[2rem] overflow-hidden mb-6 shadow-inner border-4 border-white">
+                        <img
+                            src={currentWord.image}
+                            alt={currentWord.en}
+                            className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
+                            onError={() => setImageError(true)}
+                        />
+                    </div>
+                )}
 
                 {/* Word Display & Sound Controls */}
                 <div className="flex flex-col items-center gap-3 mb-8 w-full">
@@ -199,16 +274,27 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                         "ZXCVBNM".split("")
                     ].map((row, rowIdx) => (
                         <div key={rowIdx} className="flex justify-center gap-1 sm:gap-2">
-                            {row.map((char) => (
-                                <button
-                                    key={char}
-                                    onClick={() => handleKeyPress(char)}
-                                    disabled={userInput.includes(char) && targetWord.includes(char) && userInput.filter(c => c === char).length >= targetWord.split(char).length - 1}
-                                    className="w-8 h-10 sm:w-12 sm:h-14 bg-white border-2 border-gray-100 hover:border-brand-pink hover:bg-pink-50 rounded-lg sm:rounded-xl font-bold text-lg sm:text-xl text-gray-600 shadow-sm active:scale-95 transition-all flex items-center justify-center"
-                                >
-                                    {char}
-                                </button>
-                            ))}
+                            {row.map((char) => {
+                                const isCharDisabled = userInput.includes(char) && targetWord.includes(char) && userInput.filter(c => c === char).length >= targetWord.split(char).length - 1;
+                                const isActive = activeKeys[char];
+
+                                return (
+                                    <button
+                                        key={char}
+                                        onClick={() => handleKeyPress(char)}
+                                        disabled={isCharDisabled}
+                                        className={`w-8 h-10 sm:w-12 sm:h-14 border-2 rounded-lg sm:rounded-xl font-bold text-lg sm:text-xl shadow-sm transition-all flex items-center justify-center
+                                            ${isActive
+                                                ? 'border-brand-pink bg-pink-100 scale-95 text-brand-pink'
+                                                : 'bg-white border-gray-100 hover:border-brand-pink hover:bg-pink-50 active:scale-95 text-gray-600'
+                                            }
+                                            ${isCharDisabled ? 'opacity-40 cursor-not-allowed' : ''}
+                                        `}
+                                    >
+                                        {char}
+                                    </button>
+                                );
+                            })}
                         </div>
                     ))}
                 </div>

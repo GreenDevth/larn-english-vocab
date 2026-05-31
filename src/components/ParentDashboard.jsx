@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen } from 'lucide-react';
+import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen, User } from 'lucide-react';
 import { getVocabData, saveVocabData, resetAllData, getParentPin, setParentPin, saveProgress, loadProgress } from '../utils/storage';
 import { fetchVocabFromSheet, updateSheetData, fetchSheetsList } from '../utils/googleSheet';
 import { useModal } from '../contexts/ModalContext';
@@ -25,10 +25,17 @@ const ParentDashboard = ({ onExit }) => {
     const [customSheetName, setCustomSheetName] = useState('');
     const [isCustomSheet, setIsCustomSheet] = useState(false);
 
+    const [childNameInput, setChildNameInput] = useState('');
+
     useEffect(() => {
         const savedPin = getParentPin();
         if (savedPin) setCurrentPin(savedPin);
-    }, []);
+
+        const progress = loadProgress();
+        if (progress && progress.childName) {
+            setChildNameInput(progress.childName);
+        }
+    }, [isAuthenticated]);
 
     // ✅ Helper function to clear old URL
     const handleResetUrl = () => {
@@ -268,6 +275,17 @@ const ParentDashboard = ({ onExit }) => {
         });
     };
 
+    const handleSaveChildName = () => {
+        if (!childNameInput.trim()) {
+            showAlert({ title: 'ผิดพลาด', message: 'กรุณากรอกชื่อของน้องก่อนค่ะ', variant: 'warning' });
+            return;
+        }
+        const progress = loadProgress();
+        const updatedProgress = { ...progress, childName: childNameInput.trim() };
+        saveProgress(updatedProgress);
+        showAlert({ title: 'สำเร็จ', message: 'บันทึกชื่อของน้องเรียบร้อยแล้วค่ะ', variant: 'success' });
+    };
+
     const handleChangePin = (newPin) => {
         setParentPin(newPin);
         setCurrentPin(newPin);
@@ -491,9 +509,36 @@ const ParentDashboard = ({ onExit }) => {
                     )}
 
                     {activeTab === 'settings' && (
-                        <div className="max-w-sm mx-auto py-4">
-                            <h3 className="text-xl font-bold mb-6 text-center">เปลี่ยนรหัสผ่าน (PIN)</h3>
-                            <PinChangeForm onSave={handleChangePin} />
+                        <div className="max-w-sm mx-auto py-4 space-y-8">
+                            <div>
+                                <h3 className="text-xl font-bold mb-4 text-center text-gray-700 flex items-center justify-center gap-2">
+                                    <User size={20} className="text-brand-pink" /> แก้ไขชื่อของน้อง
+                                </h3>
+                                <div className="flex flex-col gap-3">
+                                    <input
+                                        type="text"
+                                        className="border-2 p-3 rounded-xl text-center text-xl font-bold focus:border-brand-blue focus:outline-none text-gray-700 font-mali"
+                                        placeholder="ชื่อของน้อง"
+                                        value={childNameInput}
+                                        onChange={(e) => setChildNameInput(e.target.value)}
+                                    />
+                                    <button
+                                        onClick={handleSaveChildName}
+                                        className="bg-brand-blue hover:bg-blue-600 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 font-mali"
+                                    >
+                                        บันทึกชื่อใหม่
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr className="border-gray-100" />
+
+                            <div>
+                                <h3 className="text-xl font-bold mb-4 text-center text-gray-700 flex items-center justify-center gap-2">
+                                    <Lock size={20} className="text-brand-yellow" /> เปลี่ยนรหัสผ่าน (PIN)
+                                </h3>
+                                <PinChangeForm onSave={handleChangePin} />
+                            </div>
                         </div>
                     )}
                 </div>

@@ -5,6 +5,20 @@ import { speak } from '../utils/tts';
 import { playSound } from '../utils/sound';
 import VoiceSettingsModal from './VoiceSettingsModal';
 
+const isLetter = (char) => char >= 'A' && char <= 'Z';
+
+const getInitialInput = (word) => {
+    const initial = [];
+    for (let i = 0; i < word.length; i++) {
+        const char = word[i];
+        if (isLetter(char)) {
+            break;
+        }
+        initial.push(char);
+    }
+    return initial;
+};
+
 const GameScreen = ({ sessionData, onFinish, onExit }) => {
     // ... (state) ...
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -26,6 +40,7 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
 
     // ... (effects) ...
     useEffect(() => {
+        setUserInput(getInitialInput(targetWord));
         setImageError(false);
         setRevealHint(false);
         const timeout = setTimeout(() => { speakWord(); }, 500);
@@ -77,7 +92,17 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
         const nextIdx = userInput.length;
         if (char === targetWord[nextIdx]) {
             // Correct letter
-            const newUserInput = [...userInput, char];
+            let newUserInput = [...userInput, char];
+            
+            // Auto-append any subsequent non-A-Z characters (like spaces or dashes)
+            while (newUserInput.length < targetWord.length) {
+                const nextChar = targetWord[newUserInput.length];
+                if (isLetter(nextChar)) {
+                    break;
+                }
+                newUserInput.push(nextChar);
+            }
+
             setUserInput(newUserInput);
 
             // Sound Effect instead of Speak
@@ -251,19 +276,33 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
 
                 {/* Spelling Slots */}
                 <div className="flex flex-wrap justify-center gap-2 mb-8 min-h-[80px]">
-                    {targetWord.split('').map((char, idx) => (
-                        <motion.div
-                            key={idx}
-                            animate={idx < userInput.length ? { scale: [1, 1.2, 1] } : {}}
-                            className={`w-14 h-16 sm:w-16 sm:h-20 rounded-2xl flex items-center justify-center text-4xl font-black border-b-[6px] 
-                ${idx < userInput.length
-                                    ? 'bg-brand-blue text-white border-blue-600 shadow-md'
-                                    : 'bg-gray-100 text-gray-300 border-gray-200 dashed border-2'}
-              `}
-                        >
-                            {userInput[idx] || ''}
-                        </motion.div>
-                    ))}
+                    {targetWord.split('').map((char, idx) => {
+                        const isCharLetter = isLetter(char);
+                        if (!isCharLetter) {
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`flex items-center justify-center text-4xl font-black text-gray-600 ${char === ' ' ? 'w-6 sm:w-8' : 'w-10 h-16 sm:w-12 sm:h-20'}`}
+                                >
+                                    {char}
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <motion.div
+                                key={idx}
+                                animate={idx < userInput.length ? { scale: [1, 1.2, 1] } : {}}
+                                className={`w-14 h-16 sm:w-16 sm:h-20 rounded-2xl flex items-center justify-center text-4xl font-black border-b-[6px] 
+                    ${idx < userInput.length
+                                        ? 'bg-brand-blue text-white border-blue-600 shadow-md'
+                                        : 'bg-gray-100 text-gray-300 border-gray-200 dashed border-2'}
+                  `}
+                            >
+                                {userInput[idx] || ''}
+                            </motion.div>
+                        );
+                    })}
                 </div>
 
                 {/* Virtual Keyboard */}

@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
-import { loadProgress, processSessionEnd, getVocabData, saveVocabData, unlockSessionWithStars } from './utils/storage';
+import {
+    loadProgress,
+    processSessionEnd,
+    getVocabData,
+    saveVocabData,
+    unlockSessionWithStars,
+    getAllProfiles,
+    setActiveProfileId,
+} from './utils/storage';
 import { preloadVoices } from './utils/tts';
+import ProfileSelectorScreen from './components/ProfileSelectorScreen';
 import WelcomeScreen from './components/WelcomeScreen';
 import GameScreen from './components/GameScreen';
 import ScoreBoard from './components/ScoreBoard';
-import OnboardingScreen from './components/OnboardingScreen';
 import ParentDashboard from './components/ParentDashboard';
 import { useModal } from './contexts/ModalContext';
 import ModalContainer from './components/ui/ModalContainer';
@@ -15,7 +23,6 @@ function App() {
     const [loading, setLoading] = useState(true);
     const [userData, setUserData] = useState(loadProgress());
     const { showAlert } = useModal();
-    // Use a derived state for screen to handle initial load vs onboarding
     const [screen, setScreen] = useState('loading');
 
     const [selectedSessionId, setSelectedSessionId] = useState(null);
@@ -25,19 +32,19 @@ function App() {
         // 1. Load Voices
         preloadVoices();
 
-        // 2. Load Data (Dynamic Priority)
+        // 2. Load Vocab Data
         const loadData = async () => {
-            // Check LocalStorage first
+            // ตรวจ LocalStorage ก่อน (global vocab key)
             const localData = getVocabData();
             if (localData && localData.length > 0) {
-                console.log("Loaded vocab from LocalStorage");
+                console.log('Loaded vocab from LocalStorage');
                 setVocabData(localData);
-                initScreen(localData);
+                initScreen();
                 return;
             }
 
-            // Fallback to CSV
-            console.log("Loading vocab from CSV...");
+            // Fallback: โหลดจาก CSV
+            console.log('Loading vocab from CSV...');
             try {
                 const response = await fetch('./vocab.csv');
                 const csvText = await response.text();
@@ -45,7 +52,6 @@ function App() {
                 const results = [];
                 let currentSession = 1;
 
-                // Manual parsing
                 const lines = csvText.split(/\r?\n/);
                 lines.forEach(line => {
                     const trimmed = line.trim();
@@ -56,7 +62,7 @@ function App() {
                         if (match) currentSession = parseInt(match[0]);
                         return;
                     }
-                    if (trimmed.toLowerCase().startsWith('en,') || trimmed.toLowerCase().startsWith('en,')) return;
+                    if (trimmed.toLowerCase().startsWith('en,')) return;
 
                     const parts = trimmed.split(',');
                     if (parts.length >= 2) {
@@ -64,18 +70,16 @@ function App() {
                             session: currentSession,
                             en: parts[0].trim(),
                             th: parts[1].trim(),
-                            image: parts[2] ? parts[2].trim() : ''
+                            image: parts[2] ? parts[2].trim() : '',
                         });
                     }
                 });
 
                 setVocabData(results);
-                // Save to LocalStorage for next time (Enabling Dynamic Edits)
                 saveVocabData(results);
-                initScreen(results);
-
+                initScreen();
             } catch (err) {
-                console.error("Failed to load CSV", err);
+                console.error('Failed to load CSV', err);
                 setLoading(false);
             }
         };
@@ -83,15 +87,9 @@ function App() {
         loadData();
     }, []);
 
-    const initScreen = (data) => {
-        const progress = loadProgress();
-        setUserData(progress);
-
-        if (!progress.childName) {
-            setScreen('onboarding');
-        } else {
-            setScreen('welcome');
-        }
+    const initScreen = () => {
+        // ทุกครั้งที่โหลด → ไปหน้า Profile Selector เสมอ
+        setScreen('profile-select');
         setLoading(false);
     };
 
@@ -104,6 +102,20 @@ function App() {
         return groups;
     }, [vocabData]);
 
+    // ── Profile Handlers ───────────────────────────────────────────────────────
+
+    const handleSelectProfile = (profileId) => {
+        setActiveProfileId(profileId);
+        setUserData(loadProgress());
+        setScreen('welcome');
+    };
+
+    const handleSwitchUser = () => {
+        setScreen('profile-select');
+    };
+
+    // ── Session Handlers ───────────────────────────────────────────────────────
+
     const handleStartSession = (sessionId) => {
         setSelectedSessionId(sessionId);
         setCurrentScore(0);
@@ -111,38 +123,36 @@ function App() {
     };
 
     const handleUnlockSession = (sessionId) => {
-        const success = unlockSessionWithStars(sessionId, 50); // Cost 50 stars
+        const success = unlockSessionWithStars(sessionId, 50);
         if (success) {
-            setUserData(loadProgress()); // Update UI
+            setUserData(loadProgress());
             showAlert({
                 title: 'เยี่ยมมาก!',
                 message: `🎉 ปลดล็อคด่าน ${sessionId} เรียบร้อย!`,
-                variant: 'success'
+                variant: 'success',
             });
         } else {
+            const freshData = loadProgress();
+            const alreadyUnlocked = freshData.unlockedSessions.includes(sessionId);
             showAlert({
-                title: 'ดาวไม่พอ!',
-                message: `⭐ ต้องใช้ 50 ดวง (คุณมี ${userData.totalStars})`,
-                variant: 'warning'
+                title: alreadyUnlocked ? 'ปลดล็อคแล้ว!' : 'ดาวไม่พอ!',
+                message: alreadyUnlocked
+                    ? `✅ ด่าน ${sessionId} ปลดล็อคไปแล้ว`
+                    : `⭐ ต้องใช้ 50 ดวง (คุณมี ${freshData.totalStars} ดวง)`,
+                variant: alreadyUnlocked ? 'info' : 'warning',
             });
         }
     };
 
     const handleGameFinish = (finalScore) => {
         setCurrentScore(finalScore);
-
-        // Pass totalQuestions to calculate passing logic
         const totalQuestions = sessions[selectedSessionId]?.length || 0;
         const newData = processSessionEnd(selectedSessionId, finalScore, totalQuestions);
-
         setUserData(newData);
         setScreen('score');
     };
 
-    const handleOnboardingComplete = (name) => {
-        setUserData(loadProgress()); // Refresh data
-        setScreen('welcome');
-    };
+    // ── Loading State ──────────────────────────────────────────────────────────
 
     if (loading || screen === 'loading') {
         return (
@@ -154,8 +164,11 @@ function App() {
 
     return (
         <div className="App font-sans text-gray-900">
-            {screen === 'onboarding' && (
-                <OnboardingScreen onComplete={handleOnboardingComplete} />
+            {screen === 'profile-select' && (
+                <ProfileSelectorScreen
+                    onSelectProfile={handleSelectProfile}
+                    onOpenParent={() => setScreen('parent')}
+                />
             )}
             {screen === 'welcome' && (
                 <WelcomeScreen
@@ -163,6 +176,7 @@ function App() {
                     onStartSession={handleStartSession}
                     onUnlockSession={handleUnlockSession}
                     onOpenParent={() => setScreen('parent')}
+                    onSwitchUser={handleSwitchUser}
                     userData={userData}
                 />
             )}
@@ -185,8 +199,8 @@ function App() {
             {screen === 'parent' && (
                 <ParentDashboard
                     onExit={() => {
-                        const newData = getVocabData();
-                        if (newData) setVocabData(newData);
+                        const newVocab = getVocabData();
+                        if (newVocab) setVocabData(newVocab);
                         setUserData(loadProgress());
                         setScreen('welcome');
                     }}

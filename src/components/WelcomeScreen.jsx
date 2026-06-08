@@ -1,21 +1,30 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, Star, Lock, User, Settings } from 'lucide-react';
+import { BookOpen, Star, Lock, User, Settings, Users } from 'lucide-react';
 import { useModal } from '../contexts/ModalContext';
 
-const WelcomeScreen = ({ sessions, onStartSession, onUnlockSession, onOpenParent, userData }) => {
+const WelcomeScreen = ({ sessions, onStartSession, onUnlockSession, onOpenParent, onSwitchUser, userData }) => {
     const { totalStars, childName, unlockedSessions = [1] } = userData;
     const { showConfirm } = useModal();
 
     return (
         <div className="min-h-screen p-4 pb-20 bg-blue-50">
             <header className="text-center mb-10 pt-8">
-                {/* Child Profile Badge */}
-                <div className="absolute top-4 left-4 flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm">
-                    <div className="w-8 h-8 bg-brand-pink rounded-full flex items-center justify-center text-white">
-                        <User size={16} />
+                {/* Child Profile Badge + Switch User */}
+                <div className="absolute top-4 left-4 flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm">
+                        <div className="w-8 h-8 bg-brand-pink rounded-full flex items-center justify-center text-white">
+                            <User size={16} />
+                        </div>
+                        <span className="font-bold text-gray-600 font-mali">{childName}</span>
                     </div>
-                    <span className="font-bold text-gray-600 font-mali">{childName}</span>
+                    <button
+                        onClick={onSwitchUser}
+                        className="p-2 bg-white/80 backdrop-blur-sm rounded-full hover:bg-white shadow-sm transition-all border border-gray-100"
+                        title="เปลี่ยนผู้เล่น"
+                    >
+                        <Users size={20} className="text-gray-400 hover:text-brand-blue" />
+                    </button>
                 </div>
 
                 <div className="absolute top-4 right-4">
@@ -65,7 +74,7 @@ const WelcomeScreen = ({ sessions, onStartSession, onUnlockSession, onOpenParent
                                     // Lock click handler
                                     showConfirm({
                                         title: 'ด่านนี้ล็อคอยู่!',
-                                        message: 'ต้องใช้ 50 ดาวเพื่อปลดล็อคด่านนี้\nยืนยันการแลกดาวหรือไม่?',
+                                        message: `ต้องใช้ 50 ⭐ เพื่อปลดล็อคด่านนี้\nคุณมีดาว ${totalStars} ดวง\nยืนยันการแลกดาวหรือไม่?`,
                                         confirmText: 'แลก 50 ดาว',
                                         variant: 'warning',
                                         onConfirm: () => onUnlockSession(sessionId)

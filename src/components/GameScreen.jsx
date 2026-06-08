@@ -55,14 +55,23 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                 return;
             }
 
+            // รองรับ Spacebar จาก keyboard จริง
+            if (e.key === ' ') {
+                e.preventDefault();
+                setActiveKeys(prev => ({ ...prev, SPACE: true }));
+                setTimeout(() => {
+                    setActiveKeys(prev => ({ ...prev, SPACE: false }));
+                }, 150);
+                handleKeyPress(' ');
+                return;
+            }
+
             const key = e.key.toUpperCase();
             if (key.length === 1 && key >= 'A' && key <= 'Z') {
-                // Flash the virtual keyboard key
                 setActiveKeys(prev => ({ ...prev, [key]: true }));
                 setTimeout(() => {
                     setActiveKeys(prev => ({ ...prev, [key]: false }));
                 }, 150);
-
                 handleKeyPress(key);
             }
         };
@@ -90,11 +99,16 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
         if (feedback === 'correct') return;
 
         const nextIdx = userInput.length;
-        if (char === targetWord[nextIdx]) {
-            // Correct letter
+        const nextExpected = targetWord[nextIdx];
+
+        // ถ้ากด space แต่ตัวถัดไปไม่ใช่ space → ไม่ทำอะไร (ไม่ penalty)
+        if (char === ' ' && nextExpected !== ' ') return;
+
+        if (char === nextExpected) {
+            // ตัวอักษรถูก
             let newUserInput = [...userInput, char];
-            
-            // Auto-append any subsequent non-A-Z characters (like spaces or dashes)
+
+            // Auto-append ตัวอักษรที่ไม่ใช่ A-Z (เช่น space, -, ') ต่อท้ายทันที
             while (newUserInput.length < targetWord.length) {
                 const nextChar = targetWord[newUserInput.length];
                 if (isLetter(nextChar)) {
@@ -104,21 +118,15 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
             }
 
             setUserInput(newUserInput);
-
-            // Sound Effect instead of Speak
             playSound('click');
 
             if (newUserInput.length === targetWord.length) {
-                // Word Complete
-                const newScore = score + 10; // ✅ Calculate final score BEFORE async operations
+                const newScore = score + 10;
                 setFeedback('correct');
                 setScore(newScore);
                 playSound('win');
 
-                // Wait for speech to finish BEFORE transitioning
-                await speak(`Excellent!`, 'en-US');
-
-                // Add extra delay for user to appreciate the victory
+                await speak('Excellent!', 'en-US');
                 await new Promise(r => setTimeout(r, 1500));
 
                 if (currentIndex + 1 < sessionData.length) {
@@ -126,18 +134,15 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                     setFeedback(null);
                     setCurrentIndex(prev => prev + 1);
                 } else {
-                    // ✅ Pass final score (not stale)
                     onFinish(newScore);
                 }
             }
         } else {
-            // Wrong letter
+            // ตัวอักษรผิด
             setFeedback('wrong');
             playSound('wrong');
-            speak(`Try again`, 'en-US');
-
+            speak('Try again', 'en-US');
             setScore(prev => Math.max(0, prev - 2));
-
             setTimeout(() => setFeedback(null), 800);
         }
     };
@@ -336,6 +341,24 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                             })}
                         </div>
                     ))}
+
+                    {/* Spacebar — แสดงเฉพาะเมื่อคำมีช่องว่าง */}
+                    {targetWord.includes(' ') && (
+                        <div className="flex justify-center mt-1">
+                            <button
+                                onClick={() => handleKeyPress(' ')}
+                                className={`h-10 sm:h-12 px-10 sm:px-16 border-2 rounded-lg sm:rounded-xl font-bold text-base shadow-sm transition-all flex items-center justify-center gap-2
+                                    ${activeKeys['SPACE']
+                                        ? 'border-brand-pink bg-pink-100 scale-95 text-brand-pink'
+                                        : 'bg-white border-gray-100 hover:border-brand-pink hover:bg-pink-50 active:scale-95 text-gray-500'
+                                    }
+                                `}
+                            >
+                                <span className="text-lg">⎵</span>
+                                <span className="text-sm font-bold">SPACE</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
             </motion.div>
         </div>

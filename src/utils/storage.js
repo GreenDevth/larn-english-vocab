@@ -302,3 +302,21 @@ export const importAllData = (jsonData) => {
     localStorage.removeItem(ACTIVE_PROFILE_KEY);
 };
 
+/**
+ * บันทึก progress ของ profile ใดก็ได้ โดยระบุ profileId
+ */
+export const saveProfileProgress = (profileId, data) => {
+    if (!profileId) return;
+    try {
+        localStorage.setItem(getProfileKey(profileId), JSON.stringify(data));
+        // Sync ชื่อไปยัง profiles index ด้วย หากมีการเปลี่ยนแปลงชื่อ
+        if (data.childName) {
+            const profiles = getAllProfiles().map(p => (p.id === profileId ? { ...p, name: data.childName } : p));
+            _saveProfilesIndex(profiles);
+        }
+    } catch (e) {
+        console.error('Failed to save profile progress:', e);
+    }
+};
+
+

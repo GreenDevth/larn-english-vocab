@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen, User, Download, Upload, Shield } from 'lucide-react';
-import { getVocabData, saveVocabData, resetAllData, resetActiveProfileData, getParentPin, setParentPin, saveProgress, loadProgress, exportAllData, importAllData } from '../utils/storage';
+import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen, User, Download, Upload, Shield, Star, Unlock, Minus } from 'lucide-react';
+import { getVocabData, saveVocabData, resetAllData, resetActiveProfileData, getParentPin, setParentPin, saveProgress, loadProgress, exportAllData, importAllData, getAllProfiles, getProfileProgress, saveProfileProgress, getActiveProfileId } from '../utils/storage';
 import { fetchVocabFromSheet, updateSheetData, fetchSheetsList } from '../utils/googleSheet';
 import { useModal } from '../contexts/ModalContext';
 
@@ -27,6 +27,120 @@ const ParentDashboard = ({ onExit }) => {
 
     const [childNameInput, setChildNameInput] = useState('');
     const importFileRef = useRef(null);
+
+    // States สำหรับจัดการความก้าวหน้าโปรไฟล์เด็ก
+    const [profiles, setProfiles] = useState([]);
+    const [selectedProfileId, setSelectedProfileId] = useState('');
+    const [selectedProfileProgress, setSelectedProfileProgress] = useState(null);
+    const [starsInput, setStarsInput] = useState('');
+
+    // รายการด่านทั้งหมดที่มีอยู่ในระบบ
+    const availableSessions = (() => {
+        const vocab = getVocabData() || [];
+        const unique = [...new Set(vocab.map(item => item.session))].sort((a, b) => a - b);
+        return unique.length > 0 ? unique : [1, 2, 3, 4, 5, 6, 7, 8];
+    })();
+
+    // ดึงโปรไฟล์ทั้งหมดเมื่อเข้าสู่ระบบ
+    useEffect(() => {
+        if (isAuthenticated) {
+            const all = getAllProfiles();
+            setProfiles(all);
+            
+            const activeId = getActiveProfileId();
+            if (activeId && all.some(p => p.id === activeId)) {
+                setSelectedProfileId(activeId);
+                const prog = getProfileProgress(activeId);
+                setSelectedProfileProgress(prog);
+                setStarsInput(String(prog.totalStars || 0));
+            } else if (all.length > 0) {
+                setSelectedProfileId(all[0].id);
+                const prog = getProfileProgress(all[0].id);
+                setSelectedProfileProgress(prog);
+                setStarsInput(String(prog.totalStars || 0));
+            }
+        }
+    }, [isAuthenticated]);
+
+    const handleProfileChange = (profileId) => {
+        setSelectedProfileId(profileId);
+        const prog = getProfileProgress(profileId);
+        setSelectedProfileProgress(prog);
+        setStarsInput(String(prog.totalStars || 0));
+    };
+
+    // ฟังก์ชันจัดการดาว
+    const handleAddStars = (amount) => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        const currentStars = parseInt(selectedProfileProgress.totalStars || 0, 10);
+        const newStars = Math.max(0, currentStars + amount);
+        const updated = {
+            ...selectedProfileProgress,
+            totalStars: newStars
+        };
+        setSelectedProfileProgress(updated);
+        setStarsInput(String(newStars));
+        saveProfileProgress(selectedProfileId, updated);
+    };
+
+    const handleStarsInputChange = (val) => {
+        setStarsInput(val);
+        const parsed = parseInt(val, 10);
+        if (!isNaN(parsed) && parsed >= 0) {
+            const updated = {
+                ...selectedProfileProgress,
+                totalStars: parsed
+            };
+            setSelectedProfileProgress(updated);
+            saveProfileProgress(selectedProfileId, updated);
+        }
+    };
+
+    // ฟังก์ชันจัดการด่าน (ปลดล็อค / ล็อค)
+    const handleToggleSession = (sessionId) => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        if (sessionId === 1) {
+            showAlert({ title: 'ข้อแนะนำ', message: 'ด่านที่ 1 เป็นด่านเริ่มต้น ไม่สามารถล็อคได้ค่ะ', variant: 'warning' });
+            return;
+        }
+        
+        let newUnlocked = selectedProfileProgress.unlockedSessions || [1];
+        if (newUnlocked.includes(sessionId)) {
+            newUnlocked = newUnlocked.filter(id => id !== sessionId);
+        } else {
+            newUnlocked = [...newUnlocked, sessionId];
+        }
+
+        const updated = {
+            ...selectedProfileProgress,
+            unlockedSessions: newUnlocked
+        };
+        setSelectedProfileProgress(updated);
+        saveProfileProgress(selectedProfileId, updated);
+    };
+
+    const handleUnlockAll = () => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        const updated = {
+            ...selectedProfileProgress,
+            unlockedSessions: [...availableSessions]
+        };
+        setSelectedProfileProgress(updated);
+        saveProfileProgress(selectedProfileId, updated);
+        showAlert({ title: 'สำเร็จ', message: '🔓 ปลดล็อคด่านทั้งหมดเรียบร้อยแล้วค่ะ', variant: 'success' });
+    };
+
+    const handleLockAllExceptOne = () => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        const updated = {
+            ...selectedProfileProgress,
+            unlockedSessions: [1]
+        };
+        setSelectedProfileProgress(updated);
+        saveProfileProgress(selectedProfileId, updated);
+        showAlert({ title: 'สำเร็จ', message: '🔒 ล็อคด่านทั้งหมด (ยกเว้นด่าน 1) เรียบร้อยแล้วค่ะ', variant: 'success' });
+    };
+
 
     useEffect(() => {
         const savedPin = getParentPin();
@@ -426,6 +540,9 @@ const ParentDashboard = ({ onExit }) => {
                     <button onClick={() => setActiveTab('sync')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all whitespace-nowrap ${activeTab === 'sync' ? 'bg-brand-blue text-white shadow-lg' : 'bg-white text-gray-600 shadow-sm'}`}>
                         <RefreshCw size={20} /> Cloud Sync
                     </button>
+                    <button onClick={() => setActiveTab('progress')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all whitespace-nowrap ${activeTab === 'progress' ? 'bg-brand-blue text-white shadow-lg' : 'bg-white text-gray-600 shadow-sm'}`}>
+                        <Star size={20} /> จัดการดาว & ด่าน
+                    </button>
                     <button onClick={() => setActiveTab('backup')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all whitespace-nowrap ${activeTab === 'backup' ? 'bg-brand-blue text-white shadow-lg' : 'bg-white text-gray-600 shadow-sm'}`}>
                         <Shield size={20} /> Backup
                     </button>
@@ -438,6 +555,183 @@ const ParentDashboard = ({ onExit }) => {
                 </div>
 
                 <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+                    {activeTab === 'progress' && (
+                        <div className="max-w-3xl mx-auto">
+                            <div className="text-center mb-6">
+                                <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Star className="text-amber-500" size={32} fill="currentColor" />
+                                </div>
+                                <h2 className="text-2xl font-bold text-gray-800 font-mali">จัดการดาว & ด่านของเด็กๆ</h2>
+                                <p className="text-gray-500 mt-2 font-mali">ปรับปรุงคะแนนดาวสะสม หรือสลับสถานะล็อค/ปลดล็อคบทเรียนของน้องๆ ได้ที่นี่</p>
+                            </div>
+
+                            {profiles.length === 0 ? (
+                                <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                                    <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <User className="text-gray-400" size={32} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-700 font-mali">ยังไม่มีโปรไฟล์น้องๆ</h3>
+                                    <p className="text-gray-500 mt-2 font-mali">กรุณากลับไปสร้างโปรไฟล์ที่หน้าหลักก่อนนะคะ</p>
+                                </div>
+                            ) : (
+                                <div>
+                                    {/* เลือกโปรไฟล์ */}
+                                    <div className="mb-6">
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 font-mali">👤 โปรไฟล์เด็กที่ต้องการแก้ไข</label>
+                                        <select
+                                            value={selectedProfileId}
+                                            onChange={(e) => handleProfileChange(e.target.value)}
+                                            className="w-full p-4 border-2 border-gray-200 rounded-2xl bg-white focus:border-brand-blue focus:outline-none transition-all font-bold text-gray-700 text-lg font-mali"
+                                        >
+                                            {profiles.map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.avatar} {p.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {selectedProfileProgress && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* ส่วนจัดการดาว */}
+                                            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-yellow-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+                                                <div>
+                                                    <h3 className="font-bold text-gray-800 text-lg mb-3 flex items-center gap-2 font-mali">
+                                                        <Star size={20} className="text-amber-500" fill="currentColor" />
+                                                        จัดการดาวสะสม
+                                                    </h3>
+                                                    
+                                                    {/* แสดงดาวปัจจุบัน */}
+                                                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 text-center border border-yellow-100/50 mb-4 shadow-sm">
+                                                        <div className="text-xs font-bold text-amber-600/80 uppercase tracking-wider mb-1 font-mali">ดาวของน้องในปัจจุบัน</div>
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <Star size={28} className="text-amber-400 animate-pulse" fill="currentColor" />
+                                                            <span className="text-4xl font-black text-amber-600 font-mali">
+                                                                {selectedProfileProgress.totalStars || 0}
+                                                            </span>
+                                                            <span className="text-gray-500 font-bold text-lg font-mali">ดวง</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ปุ่มจัดการด่วน */}
+                                                    <div className="mb-4">
+                                                        <div className="text-xs font-bold text-gray-500 mb-2 font-mali">ปุ่มจัดการด่วน:</div>
+                                                        <div className="grid grid-cols-3 gap-2 mb-2">
+                                                            <button
+                                                                onClick={() => handleAddStars(10)}
+                                                                className="py-2.5 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-green-100"
+                                                            >
+                                                                +10 ดาว
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAddStars(50)}
+                                                                className="py-2.5 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-green-100"
+                                                            >
+                                                                +50 ดาว
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAddStars(100)}
+                                                                className="py-2.5 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-green-100"
+                                                            >
+                                                                +100 ดาว
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-2">
+                                                            <button
+                                                                onClick={() => handleAddStars(-10)}
+                                                                className="py-2.5 bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-red-100"
+                                                            >
+                                                                -10 ดาว
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAddStars(-50)}
+                                                                className="py-2.5 bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-red-100"
+                                                            >
+                                                                -50 ดาว
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAddStars(-100)}
+                                                                className="py-2.5 bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-red-100"
+                                                            >
+                                                                -100 ดาว
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* ช่องกรอกข้อมูล */}
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-500 mb-1.5 font-mali">ระบุจำนวนดาวที่ต้องการกำหนดเอง:</label>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        value={starsInput}
+                                                        onChange={(e) => handleStarsInputChange(e.target.value)}
+                                                        className="w-full p-3 border-2 border-yellow-200 rounded-xl focus:border-amber-400 focus:outline-none text-center text-xl font-bold font-mali text-gray-700 bg-white"
+                                                        placeholder="ตัวอย่าง 250"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* ส่วนจัดการด่าน */}
+                                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+                                                <div>
+                                                    <h3 className="font-bold text-gray-800 text-lg mb-3 flex items-center gap-2 font-mali">
+                                                        <Unlock size={20} className="text-brand-blue" />
+                                                        จัดการการปลดล็อคด่าน
+                                                    </h3>
+
+                                                    {/* ปุ่มลัดปลดล็อค/ล็อคทั้งหมด */}
+                                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                                        <button
+                                                            onClick={handleUnlockAll}
+                                                            className="flex items-center justify-center gap-1.5 py-2.5 bg-brand-blue hover:bg-blue-600 active:scale-95 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-blue-100 font-mali"
+                                                        >
+                                                            <Unlock size={14} /> ปลดล็อคทุกด่าน
+                                                        </button>
+                                                        <button
+                                                            onClick={handleLockAllExceptOne}
+                                                            className="flex items-center justify-center gap-1.5 py-2.5 bg-gray-600 hover:bg-gray-700 active:scale-95 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-gray-200 font-mali"
+                                                        >
+                                                            <Lock size={14} /> ล็อคหมดยกเว้นด่าน 1
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="text-xs font-bold text-gray-500 mb-2 font-mali">คลิกที่แต่ละด่านเพื่อสลับสถานะ:</div>
+                                                    
+                                                    {/* รายชื่อด่าน */}
+                                                    <div className="grid grid-cols-2 gap-2 max-h-[190px] overflow-y-auto pr-1">
+                                                        {availableSessions.map(sessionId => {
+                                                            const isUnlocked = selectedProfileProgress.unlockedSessions?.includes(sessionId);
+                                                            return (
+                                                                <button
+                                                                    key={sessionId}
+                                                                    onClick={() => handleToggleSession(sessionId)}
+                                                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border-2 transition-all active:scale-95 font-mali font-bold text-sm ${
+                                                                        isUnlocked
+                                                                            ? 'bg-green-500 text-white border-green-600 shadow-sm shadow-green-100 hover:bg-green-600'
+                                                                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                                                    }`}
+                                                                >
+                                                                    <span>ด่านที่ {sessionId}</span>
+                                                                    {isUnlocked ? <Unlock size={14} /> : <Lock size={14} className="text-gray-400" />}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <p className="text-xs text-gray-400 mt-4 leading-relaxed font-mali">
+                                                    * ด่านสีเขียวคือปลดล็อคแล้ว น้องๆ สามารถคลิกเข้าไปเล่นได้ทันทีโดยไม่ต้องจ่ายดาวสะสม
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {activeTab === 'backup' && (
                         <div className="max-w-xl mx-auto">
                             <div className="text-center mb-8">

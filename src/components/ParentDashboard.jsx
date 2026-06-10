@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen, User, Download, Upload, Shield, Star, Unlock, Minus } from 'lucide-react';
+import { Home, Lock, FileText, RefreshCw, Trash2, CheckCircle, Smartphone, Plus, List, FolderOpen, User, Download, Upload, Shield, Star, Unlock, Minus, HelpCircle } from 'lucide-react';
 import { getVocabData, saveVocabData, resetAllData, resetActiveProfileData, getParentPin, setParentPin, saveProgress, loadProgress, exportAllData, importAllData, getAllProfiles, getProfileProgress, saveProfileProgress, getActiveProfileId } from '../utils/storage';
 import { fetchVocabFromSheet, updateSheetData, fetchSheetsList } from '../utils/googleSheet';
 import { useModal } from '../contexts/ModalContext';
@@ -139,6 +139,44 @@ const ParentDashboard = ({ onExit }) => {
         setSelectedProfileProgress(updated);
         saveProfileProgress(selectedProfileId, updated);
         showAlert({ title: 'สำเร็จ', message: '🔒 ล็อคด่านทั้งหมด (ยกเว้นด่าน 1) เรียบร้อยแล้วค่ะ', variant: 'success' });
+    };
+
+    const handleToggleShowVocabText = () => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        const currentShow = selectedProfileProgress.showVocabText !== false;
+        const updated = {
+            ...selectedProfileProgress,
+            showVocabText: !currentShow
+        };
+        if (updated.showVocabText) {
+            updated.useStarsForVocab = false;
+        }
+        setSelectedProfileProgress(updated);
+        saveProfileProgress(selectedProfileId, updated);
+    };
+
+    const handleToggleUseStarsForVocab = () => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        const currentUseStars = selectedProfileProgress.useStarsForVocab === true;
+        const updated = {
+            ...selectedProfileProgress,
+            useStarsForVocab: !currentUseStars
+        };
+        setSelectedProfileProgress(updated);
+        saveProfileProgress(selectedProfileId, updated);
+    };
+
+    const handleVocabStarCostChange = (val) => {
+        if (!selectedProfileId || !selectedProfileProgress) return;
+        const parsed = parseInt(val, 10);
+        if (!isNaN(parsed) && parsed >= 0) {
+            const updated = {
+                ...selectedProfileProgress,
+                vocabStarCost: parsed
+            };
+            setSelectedProfileProgress(updated);
+            saveProfileProgress(selectedProfileId, updated);
+        }
     };
 
 
@@ -592,7 +630,7 @@ const ParentDashboard = ({ onExit }) => {
                                     </div>
 
                                     {selectedProfileProgress && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             {/* ส่วนจัดการดาว */}
                                             <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-yellow-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
                                                 <div>
@@ -723,6 +761,97 @@ const ParentDashboard = ({ onExit }) => {
 
                                                 <p className="text-xs text-gray-400 mt-4 leading-relaxed font-mali">
                                                     * ด่านสีเขียวคือปลดล็อคแล้ว น้องๆ สามารถคลิกเข้าไปเล่นได้ทันทีโดยไม่ต้องจ่ายดาวสะสม
+                                                </p>
+                                            </div>
+
+                                            {/* ส่วนตั้งค่าคำใบ้คำศัพท์ */}
+                                            <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-rose-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between md:col-span-2 lg:col-span-1">
+                                                <div>
+                                                    <h3 className="font-bold text-gray-800 text-lg mb-3 flex items-center gap-2 font-mali">
+                                                        <HelpCircle size={20} className="text-brand-pink" />
+                                                        ตั้งค่าคำใบ้คำศัพท์ (ไม่มีรูป)
+                                                    </h3>
+
+                                                    {/* Toggle 1: เปิด/ปิดการแสดงคำศัพท์ */}
+                                                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-rose-100/50 mb-4 shadow-sm flex justify-between items-center">
+                                                        <div>
+                                                            <div className="text-sm font-bold text-gray-700 font-mali">แสดงคำใบ้คำศัพท์</div>
+                                                            <div className="text-xs text-gray-400 font-mali">แสดงตัวสะกดภาษาอังกฤษทันที</div>
+                                                        </div>
+                                                        <button
+                                                            onClick={handleToggleShowVocabText}
+                                                            className={`w-14 h-8 rounded-full transition-colors relative flex items-center p-1 ${
+                                                                (selectedProfileProgress.showVocabText !== false) ? 'bg-green-500' : 'bg-gray-300'
+                                                            }`}
+                                                        >
+                                                            <div
+                                                                className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform ${
+                                                                    (selectedProfileProgress.showVocabText !== false) ? 'translate-x-6' : 'translate-x-0'
+                                                                }`}
+                                                            />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Toggle 2: เปิด/ปิดการใช้ดาว */}
+                                                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-rose-100/50 mb-4 shadow-sm flex justify-between items-center">
+                                                        <div>
+                                                            <div className="text-sm font-bold text-gray-700 font-mali">ใช้ดาวแลกคำใบ้</div>
+                                                            <div className="text-xs text-gray-400 font-mali">ต้องใช้ดาวแลกจึงจะแสดงคำใบ้</div>
+                                                        </div>
+                                                        <button
+                                                            disabled={selectedProfileProgress.showVocabText !== false}
+                                                            onClick={handleToggleUseStarsForVocab}
+                                                            className={`w-14 h-8 rounded-full transition-colors relative flex items-center p-1 ${
+                                                                selectedProfileProgress.showVocabText !== false 
+                                                                    ? 'bg-gray-100 cursor-not-allowed' 
+                                                                    : (selectedProfileProgress.useStarsForVocab === true ? 'bg-brand-pink' : 'bg-gray-300')
+                                                            }`}
+                                                        >
+                                                            <div
+                                                                className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform ${
+                                                                    selectedProfileProgress.showVocabText !== false
+                                                                        ? 'translate-x-0 bg-gray-200'
+                                                                        : (selectedProfileProgress.useStarsForVocab === true ? 'translate-x-6' : 'translate-x-0')
+                                                                }`}
+                                                            />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* ตั้งค่าจำนวนดาวที่ต้องใช้ */}
+                                                    <div className={`transition-all duration-300 ${
+                                                        selectedProfileProgress.showVocabText !== false || selectedProfileProgress.useStarsForVocab !== true
+                                                            ? 'opacity-40 pointer-events-none'
+                                                            : 'opacity-100'
+                                                    }`}>
+                                                        <label className="block text-xs font-bold text-gray-500 mb-1.5 font-mali">ระบุจำนวนดาวที่ต้องใช้:</label>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                disabled={selectedProfileProgress.showVocabText !== false || selectedProfileProgress.useStarsForVocab !== true}
+                                                                onClick={() => handleVocabStarCostChange(Math.max(0, (selectedProfileProgress.vocabStarCost ?? 10) - 5))}
+                                                                className="w-10 h-10 bg-white hover:bg-rose-50 active:scale-95 text-gray-600 font-bold rounded-xl flex items-center justify-center transition-all border border-rose-100 font-mali"
+                                                            >
+                                                                -5
+                                                            </button>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                disabled={selectedProfileProgress.showVocabText !== false || selectedProfileProgress.useStarsForVocab !== true}
+                                                                value={selectedProfileProgress.vocabStarCost ?? 10}
+                                                                onChange={(e) => handleVocabStarCostChange(e.target.value)}
+                                                                className="flex-1 p-2 border-2 border-rose-100 rounded-xl focus:border-rose-400 focus:outline-none text-center font-bold font-mali text-gray-700 bg-white"
+                                                            />
+                                                            <button
+                                                                disabled={selectedProfileProgress.showVocabText !== false || selectedProfileProgress.useStarsForVocab !== true}
+                                                                onClick={() => handleVocabStarCostChange((selectedProfileProgress.vocabStarCost ?? 10) + 5)}
+                                                                className="w-10 h-10 bg-white hover:bg-rose-50 active:scale-95 text-gray-600 font-bold rounded-xl flex items-center justify-center transition-all border border-rose-100 font-mali"
+                                                            >
+                                                                +5
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 mt-4 leading-relaxed font-mali">
+                                                    * การเปิด "ใช้ดาวแลกคำใบ้" จะใช้งานได้ก็ต่อเมื่อปิดการแสดงคำใบ้ปกติ
                                                 </p>
                                             </div>
                                         </div>

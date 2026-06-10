@@ -20,6 +20,9 @@ const defaultProfileState = {
     completedSessions: [],
     unlockedSessions: [1],
     childName: '',
+    showVocabText: true,
+    useStarsForVocab: false,
+    vocabStarCost: 10,
 };
 
 const getProfileKey = (id) => `larnvocab_profile_${id}`;

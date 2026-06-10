@@ -4,6 +4,8 @@ import { Volume2, ChevronRight, X, Sparkles, AlertCircle, Settings, Type, HelpCi
 import { speak } from '../utils/tts';
 import { playSound } from '../utils/sound';
 import VoiceSettingsModal from './VoiceSettingsModal';
+import { useModal } from '../contexts/ModalContext';
+import { saveProgress } from '../utils/storage';
 
 const isLetter = (char) => char >= 'A' && char <= 'Z';
 
@@ -19,8 +21,8 @@ const getInitialInput = (word) => {
     return initial;
 };
 
-const GameScreen = ({ sessionData, onFinish, onExit }) => {
-    // ... (state) ...
+const GameScreen = ({ sessionData, onFinish, onExit, userData, onUpdateUserData }) => {
+    const { showAlert, showConfirm } = useModal();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [userInput, setUserInput] = useState([]);
     const [feedback, setFeedback] = useState(null);
@@ -29,6 +31,7 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
     const [activeKeys, setActiveKeys] = useState({});
     const [imageError, setImageError] = useState(false);
     const [revealHint, setRevealHint] = useState(false);
+    const [hintPurchased, setHintPurchased] = useState(false);
 
     // ... (currentWord logic) ...
     const currentWord = sessionData[currentIndex];
@@ -43,6 +46,7 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
         setUserInput(getInitialInput(targetWord));
         setImageError(false);
         setRevealHint(false);
+        setHintPurchased(false);
         const timeout = setTimeout(() => { speakWord(); }, 500);
         return () => clearTimeout(timeout);
     }, [currentIndex]);
@@ -147,6 +151,58 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
         }
     };
 
+    const handleMysteryCardClick = () => {
+        if (revealHint) {
+            setRevealHint(false);
+            return;
+        }
+
+        const showText = userData?.showVocabText !== false;
+        const useStars = userData?.useStarsForVocab === true;
+        const starCost = userData?.vocabStarCost ?? 10;
+
+        if (showText) {
+            setRevealHint(true);
+        } else if (useStars) {
+            if (hintPurchased) {
+                setRevealHint(true);
+            } else {
+                showConfirm({
+                    title: 'ใช้ดาวดูคำใบ้?',
+                    message: `คุณต้องการใช้ดาวสะสม ${starCost} ดวง เพื่อดูคำใบ้คำศัพท์นี้ใช่หรือไม่?`,
+                    confirmText: 'ใช้ดาว',
+                    cancelText: 'ยกเลิก',
+                    onConfirm: () => {
+                        const currentStars = userData?.totalStars || 0;
+                        if (currentStars >= starCost) {
+                            const updated = {
+                                ...userData,
+                                totalStars: currentStars - starCost
+                            };
+                            saveProgress(updated);
+                            if (onUpdateUserData) onUpdateUserData(updated);
+                            setHintPurchased(true);
+                            setRevealHint(true);
+                            playSound('win');
+                        } else {
+                            showAlert({
+                                title: 'ดาวไม่พอ!',
+                                message: `ต้องใช้ดาวสะสม ${starCost} ดวง (คุณมี ${currentStars} ดวง)`,
+                                variant: 'warning'
+                            });
+                        }
+                    }
+                });
+            }
+        } else {
+            showAlert({
+                title: 'คำใบ้ถูกปิดใช้งาน',
+                message: 'ผู้ปกครองปิดการใช้งานคำใบ้ข้อความคำศัพท์ค่ะ',
+                variant: 'info'
+            });
+        }
+    };
+
     return (
         <div className="min-h-screen flex flex-col p-4 max-w-3xl mx-auto">
             {/* Settings Modal */}
@@ -199,7 +255,7 @@ const GameScreen = ({ sessionData, onFinish, onExit }) => {
                 {/* Image or Mystery Card */}
                 {(!currentWord.image || imageError) ? (
                     <motion.div
-                        onClick={() => setRevealHint(prev => !prev)}
+                        onClick={handleMysteryCardClick}
                         className="w-64 h-64 bg-gradient-to-br from-indigo-400 via-purple-500 to-pink-500 rounded-[2rem] shadow-xl border-4 border-white flex flex-col items-center justify-center p-4 cursor-pointer relative overflow-hidden mb-6 select-none"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}

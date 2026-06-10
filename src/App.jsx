@@ -185,6 +185,8 @@ function App() {
                     sessionData={sessions[selectedSessionId]}
                     onFinish={handleGameFinish}
                     onExit={() => setScreen('welcome')}
+                    userData={userData}
+                    onUpdateUserData={setUserData}
                 />
             )}
             {screen === 'score' && (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, ChevronRight, X, Sparkles, AlertCircle, Settings, Type, HelpCircle } from 'lucide-react';
+import { Volume2, ChevronRight, X, Sparkles, AlertCircle, Settings, Type, HelpCircle, Star } from 'lucide-react';
 import { speak } from '../utils/tts';
 import { playSound } from '../utils/sound';
 import VoiceSettingsModal from './VoiceSettingsModal';
@@ -220,6 +220,10 @@ const GameScreen = ({ sessionData, onFinish, onExit, userData, onUpdateUserData 
                 </div>
 
                 <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5 bg-amber-100 px-4 py-1 rounded-xl text-amber-700 font-bold border-2 border-amber-200">
+                        <Star size={18} className="text-amber-500 animate-pulse" fill="currentColor" />
+                        <span>{userData?.totalStars || 0}</span>
+                    </div>
                     <div className="bg-yellow-100 px-4 py-1 rounded-xl text-yellow-700 font-bold border-2 border-yellow-200">
                         Score: {score}
                     </div>
